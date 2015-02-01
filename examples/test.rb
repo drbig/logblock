@@ -23,6 +23,7 @@ Logblock::Daemon.new(:logger => logger) do
     match /(?<key>\d+) This is (.*)/, 3, 150 do |k, m|
       puts "Key - #{k} - Got something"
       pp m
+      after(5) { puts "5s delayed from #{k} - #{m}" }
     end
   end
 end.run!

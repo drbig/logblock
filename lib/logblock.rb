@@ -34,7 +34,7 @@ module Logblock
     end
 
     def run!(key, match)
-      instance_eval { @blk.call(key, match) }
+      instance_exec(key, match, &@blk)
     end
 
     def after(delay, &blk)
