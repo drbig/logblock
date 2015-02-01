@@ -75,7 +75,7 @@ module Logblock
       @daemon = opts[:daemon]
 
       @sources = Hash.new
-      yield self
+      instance_eval &blk
     end
 
     def watch(path, &blk)
@@ -84,7 +84,8 @@ module Logblock
 
       src = Source.new(path)
       @sources[path] = src
-      yield src
+      src.instance_eval &blk
+      src
     end
 
     def run!
