@@ -15,25 +15,26 @@ module Logblock
       @within = within
       @blk = blk
 
-      @counter = Array.new
+      @counters = Hash.new {|h,k| h[k] = Array.new }
       @timers = Array.new
     end
 
-    def inc
-      @counter.push(Time.now.utc)
-      return false if @counter.length < @threshold
+    def inc(key)
+      cnt = @counters[key]
+      cnt.push(Time.now.utc)
+      return false if cnt.length < @threshold
 
-      if @counter.last - @counter.first <= @within
-        @counter.clear
+      if cnt.last - cnt.first <= @within
+        cnt.clear
         return true
       end
 
-      @counter.shift
+      cnt.shift
       false
     end
 
-    def run!(match)
-      instance_eval { @blk.call(match) }
+    def run!(key, match)
+      instance_eval { @blk.call(key, match) }
     end
 
     def after(delay, &blk)
@@ -114,10 +115,11 @@ module Logblock
               log :debug, "New line in '#{s.path}'"
               s.filters.each_pair do |regexp, filter|
                 if m = line.match(regexp)
-                  log :debug, "Match for '#{regexp}' in '#{s.path}'"
-                  if filter.inc
-                    log :info, "Trigger for '#{regexp}' in '#{s.path}'"
-                    filter.run!(m)
+                  key = m[:key]
+                  log :debug, "Match for '#{regexp}' with key '#{key}' in '#{s.path}'"
+                  if filter.inc(key)
+                    log :info, "Trigger for '#{regexp}' with key '#{key}' in '#{s.path}'"
+                    filter.run!(key, m)
                   end
                 end
               end

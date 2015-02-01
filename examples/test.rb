@@ -14,14 +14,14 @@ logger.formatter = lambda {|s, d, p, m| "#{s.ljust(5)} | #{m}\n" }
 
 Logblock::Daemon.new(:logger => logger) do |d|
   d.watch '/tmp/test1.txt' do |s|
-    s.match /This is an error/, 5, 60 do |m|
-      puts 'Error triggered'
+    s.match /(?<key>\d+) This is an error/, 5, 60 do |k, m|
+      puts "Key - #{k} - Error triggered"
       pp m
     end
   end
   d.watch '/tmp/test2.txt' do |s|
-    s.match /This is (.*)/, 3, 150 do |m|
-      puts 'Got something'
+    s.match /(?<key>\d+) This is (.*)/, 3, 150 do |k, m|
+      puts "Key - #{k} - Got something"
       pp m
     end
   end
