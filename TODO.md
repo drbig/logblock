@@ -1,0 +1,14 @@
+- Handle file closed/renamed etc.
+	- At least handle log rotation (i.e. truncated file, same path).
+	- Rest may be difficult to write in a portable way.
+- ~~Add inotify support as auto-optional thing~~
+	- Nope, not portable.
+- Better logging
+	- Consistent, succinct but informative etc.
+- Proper binary? (ala backup)
+- Tests
+- Code cleanup
+- README.md
+	- A proper one.
+- Docs
+- Make a GEM
