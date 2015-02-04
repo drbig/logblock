@@ -51,10 +51,12 @@ module Logblock
   end
 
   class Source
+    attr_accessor :read
     attr_reader :path, :filters
 
     def initialize(path)
       @path = path
+      @read = 0
 
       @filters = Hash.new
     end
@@ -99,6 +101,7 @@ module Logblock
           fd = File.open(path, 'r')
           fd.seek(0, IO::SEEK_END)
           src[fd] = @sources[path]
+          src[fd].read = File.size(path)
         end
       rescue SystemCallError => e
         src.each_key {|fd| fd.close }
@@ -107,25 +110,74 @@ module Logblock
       log :info, "Opened #{src.length} sources"
 
       log :info, "Entering main loop"
+      run = true
       begin
-        while true
+        while run
           src.keys.each do |fd|
+            s = src[fd]
             begin
-              line = fd.readline
-              s = src[fd]
-              log :debug, "New line in '#{s.path}'"
-              s.filters.each_pair do |regexp, filter|
-                if m = line.match(regexp)
-                  key = m[:key]
-                  log :debug, "Match for '#{regexp}' with key '#{key}' in '#{s.path}'"
-                  if filter.inc(key)
-                    log :info, "Trigger for '#{regexp}' with key '#{key}' in '#{s.path}'"
-                    filter.run!(key, m)
+              # we need it for the exceptions...
+              lines = [fd.readline]
+              lines += fd.each_line.to_a
+              lines.each do |line|
+                s.read += line.size
+                log :debug, "New line in '#{s.path}'"
+                s.filters.each_pair do |regexp, filter|
+                  if m = line.match(regexp)
+                    key = m[:key]
+                    log :debug, "Match for '#{regexp}' with key '#{key}' in '#{s.path}'"
+                    if filter.inc(key)
+                      log :info, "Trigger for '#{regexp}' with key '#{key}' in '#{s.path}'"
+                      filter.run!(key, m)
+                    end
                   end
                 end
               end
             rescue EOFError
-              # it's ok
+              if File.exists? s.path
+                size = File.size(s.path)
+                if size != s.read
+                  log :warn, "File '#{s.path}' size mismatch, reopening..."
+                  log :debug, "Reported '#{size}' vs internal '#{s.read}' for '#{s.path}'"
+                  src.delete(fd)
+                  fd.close
+
+                  begin
+                    fd = File.open(s.path, 'r')
+                    fd.seek(0, IO::SEEK_END)
+                    s.read = size
+                    src[fd] = s
+                  rescue SystemCallError => e
+                    log :error, "Couldn't reopen '#{s.path}', file removed"
+                    run = false if src.empty?
+                  else
+                    log :info, "Reopened '#{s.path}'"
+                    log :debug, "File '#{s.path}' internal size '#{s.read}'"
+                  end
+
+                end
+              else
+                log :warn, "File '#{s.path}' deleted, removing"
+                src.delete(fd)
+              end
+            rescue  Errno::ENOENT, Errno::ESTALE, Errno::EBADF => e
+              log :warn, "Problem with '#{s.path}', reopening..."
+              log :debug, "Exception '#{e}' for '#{s.path}'"
+              src.delete(fd)
+              fd.close
+
+              begin
+                fd = File.open(s.path, 'r')
+                fd.seek(0, IO::SEEK_END)
+                s.read = size
+                src[fd] = s
+              rescue SystemCallError => e
+                log :error, "Couldn't reopen '#{s.path}', file removed"
+                src.delete(fd)
+                run = false if src.empty?
+              else
+                log :info, "Reopened '#{s.path}'"
+              end
             end
           end
           sleep(1)
